@@ -64,6 +64,27 @@ class BranchEvidenceTests(unittest.TestCase):
         )
 
 
+    def test_future_claim_not_used_for_historical_answer(self):
+        pages = {
+            "https://example.com/2025": (
+                "January 15, 2025\n"
+                "Dupaco has 23 branch office locations."
+            ),
+            "https://example.com/2026": (
+                "September 15, 2026\n"
+                "Dupaco has 22 branch office locations."
+            ),
+        }
+
+        result = select_branch_count(
+            pages, as_of="2025-12-31"
+        )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["count"], 23)
+
+
+
 class BranchHoursTests(unittest.TestCase):
 
     def test_separate_lobby_and_drive_up(self):
