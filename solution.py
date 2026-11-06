@@ -21,6 +21,15 @@ WORDS = re.compile(r"[a-z0-9]+(?:[.$][a-z0-9]+)*", re.I)
 NUMBER = re.compile(r'\b\d+(?:\.\d+)?%|\$\s*\d[\d,]*(?:\.\d+)?')
 PCT = re.compile(r'(?<!\w)\d+(?:\.\d+)?\s*%')
 ROW = re.compile(r'^\|.*\|$')
+KV_FACT = re.compile(r'^\s*(?:[-*]\s*)?([^:|]{5,110}):\s*(\$\s*\d[\d,]*(?:\.\d+)?|\d+(?:\.\d+)?\s*%)\s*(?:APY|APR)?\s*$', re.I)
+MONTH_WORDS = {'one':1,'two':2,'three':3,'four':4,'five':5,'six':6,'seven':7,'eight':8,'nine':9,'ten':10,'twelve':12}
+def normalized_qualifiers(text):
+    s = text.lower().replace('–','-').replace('—','-')
+    for word,n in MONTH_WORDS.items():
+        s=re.sub(r'\b'+word+r'\s*[- ]?months?\b',str(n)+' month',s)
+    s=re.sub(r'\b(\d+)\s*[- ]?months?\b',r'\1 month',s)
+    return s
+
 
 def tokens(s):
     return [w for w in WORDS.findall(s.lower().replace('home$tart','homestart')) if w not in STOP and len(w)>1]
@@ -73,12 +82,21 @@ class Knowledge:
         self.index={}
         self.page_by_snapshot={}
         self.events=defaultdict(list)
+        self.key_facts=defaultdict(list)
         self._conflicts=None
 
     def ingest(self,snapshot):
         docs=[]; dfs=Counter(); inverted=defaultdict(list)
         self.page_by_snapshot[snapshot.snapshot_id]={p.url.rstrip("/"):p.markdown for p in snapshot.pages}
         for p in snapshot.pages:
+            for line in p.markdown.splitlines():
+                match=KV_FACT.match(line.strip())
+                if match:
+                    label, value=match.groups()
+                    label=normalized_qualifiers(label.strip())
+                    if not any(x in label for x in ('expired','end date')):
+                        key=(p.url.rstrip('/'), norm(label))
+                        self.key_facts[key].append((snapshot.taken_on,value.replace(' ',''),p.url,snapshot.snapshot_id,line.strip(),label))
             for passage, raw, kind in make_passages(p.markdown):
                 tok=tokens(passage+' '+p.title+' '+p.url.split('/')[-1].replace('-',' '))
                 if not tok:continue
@@ -96,6 +114,9 @@ class Knowledge:
         self.snapshots.append((snapshot.taken_on,snapshot.snapshot_id))
         self.index[snapshot.snapshot_id]=(docs,dfs,inverted)
         self._conflicts=None
+
+    def _date_for_snapshot(self,sid):
+        return next((d for d,s in self.snapshots if s==sid),None)
 
     def _snapshot(self,as_of):
         available=[(d,s) for d,s in self.snapshots if not as_of or d<=as_of[:10]]
@@ -132,7 +153,47 @@ class Knowledge:
         return [(sc,docs[i]) for sc,i in scored[:limit]]
 
     def _refuse(self):
-        return Answer("I don't know; the supplied website snapshots do not list a verified answer. Please contact Dupaco for confirmation.",[],False)
+        return Answer("I don't know; the supplied website snapshots do not list a verified answer. Please contact the credit union for confirmation.",[],False)
+
+    def _fact_answer(self, question, as_of):
+        # Strictly matched key-value facts; persist earlier facts if later crawls omit a page.
+        q=normalized_qualifiers(question)
+        qwords=set(tokens(q))
+        months=set(re.findall(r'\b(\d+)\s*month\b',q))
+        wants_jumbo=bool(re.search(r'\bjumbo\b',q))
+        wants_cert=bool(re.search(r'\b(certificates?|cd|share certificate)\b',q))
+        wants_fee=bool(re.search(r'\b(fee|cost|charge|replacement|how much)\b',q))
+        if not (wants_cert or wants_fee): return None
+        if wants_cert and not months: return None  # broad certificate questions need complete tables
+        candidates=[]
+        for (url, label_key),events in self.key_facts.items():
+            valid=[x for x in events if not as_of or x[0]<=as_of[:10]]
+            if not valid:continue
+            selected=max(valid,key=lambda x:x[0])
+            day,value,source,sid,raw,label=selected
+            labelwords=set(tokens(label))
+            label_months=set(re.findall(r'\b(\d+)\s*month\b',label))
+            if months and label_months != months:continue
+            if wants_jumbo and 'jumbo' not in labelwords:continue
+            if not wants_jumbo and 'jumbo' in labelwords and wants_cert:continue
+            if wants_cert and not (labelwords & {'certificate','certificates','cd'}):continue
+            if wants_fee and not wants_cert and not (labelwords & {'fee','replacement','charge','card'}):continue
+            overlap=len(qwords & labelwords)
+            if overlap<2:continue
+            score=overlap*3 + authority(source)
+            if 'apy' in q and 'apy' in labelwords:score+=2
+            if 'debit' in q and 'debit' in labelwords:score+=3
+            if 'lost' in q and 'lost' in labelwords:score+=3
+            if 'card' in q and 'card' in labelwords:score+=2
+            if wants_cert and months:score+=3
+            candidates.append((score,day,value,source,sid,raw,label))
+        if not candidates:return None
+        candidates.sort(key=lambda x:(x[0],x[1]),reverse=True)
+        score,day,value,source,sid,raw,label=candidates[0]
+        if score<7:return None
+        # Keep metric explicit so a fee cannot be mislabeled APY or vice versa.
+        text=f'{label.strip().capitalize()}: {value}'
+        return Answer(text,[Source(source,sid,raw[:230])],True)
 
     def _structured(self, question, sid):
         q=question.lower()
@@ -257,8 +318,13 @@ class Knowledge:
         sid=self._snapshot(as_of)
         if not sid:return self._refuse()
         q=question.lower()
+        fact=self._fact_answer(question,as_of or self._date_for_snapshot(sid))
+        if fact:return fact
         structured=self._structured(question,sid)
         if structured:return structured
+        # Do not back off to a standard certificate when a specific jumbo term is unavailable.
+        if 'jumbo' in q and ('certificate' in q or re.search(r'\bcd\b',q)) and re.search(r'\b\d+\s*[- ]?months?\b',normalized_qualifiers(q)):
+            return self._refuse()
         found=self._retrieve(question,sid,70)
         if not found:return self._refuse()
         # No published public interest rate for particular ARM and construction options.
@@ -341,6 +407,22 @@ class Knowledge:
     def conflicts(self):
         if self._conflicts is not None:return self._conflicts
         out=[];seen=set()
+        # Compare values for the same text-labeled fact, not unrelated products or tiers.
+        for (url,label_key),events in self.key_facts.items():
+            ordered=sorted(events,key=lambda x:x[0])
+            distinct=[]
+            for day,value,source,sid,raw,label in ordered:
+                if value not in [v for v,_ in distinct]:distinct.append((value,(source,sid,raw)))
+            if len(distinct)<2:continue
+            latest=ordered[-1]
+            out.append(Conflict(
+                topic=latest[5],
+                values=[v for v,_ in distinct],
+                sources=[Source(u,sid,raw[:180]) for v,(u,sid,raw) in distinct],
+                resolution=latest[1],
+                reason='The same qualified fact changed between snapshots; use the most recent non-expired authoritative statement.'
+            ))
+            seen.add((url,label_key))
         # Same page and same row identity, different numeric evidence across snapshots.
         for (url,qualifiers), events in self.events.items():
             if authority(url)<0:continue
