@@ -332,9 +332,75 @@ class Knowledge:
                 matches=[line.strip() for line in page[1].splitlines() if 'fifth' in line.lower()]
                 return deliver(matches[:2],page)
         if 'lobby hour' in q or 'drive-up hours' in q or 'drive up hours' in q:
-            if contact:
-                matches=[x.strip() for x in contact[1].splitlines() if '8:30' in x or '8 a.m.' in x or '12:30' in x]
-                if matches:return deliver(matches[:5],contact)
+            from branch_hours import extract_branch_hours
+
+            service = (
+                'drive-up'
+                if 'drive' in q
+                else 'lobby'
+            )
+
+            candidates = []
+            for url, markdown in sorted(pages.items()):
+                if '/newsroom/' not in url:
+                    continue
+
+                for item in extract_branch_hours(markdown):
+                    if item['service'] != service:
+                        continue
+
+                    schedule = item['schedule'].strip()
+                    if not schedule or len(schedule) > 450:
+                        continue
+
+                    candidates.append((url, schedule))
+
+            if service == 'drive-up':
+                patterns = [
+                    lambda s: '8 a.m.' in s and 'noon' in s,
+                    lambda s: '8 a.m.' in s and '1 p.m.' in s,
+                    lambda s: '9 a.m.' in s and 'saturday-sunday' in s,
+                ]
+            else:
+                patterns = [
+                    lambda s: 'monday-thursday' in s and '12:30' in s,
+                    lambda s: 'saturday' in s and 'noon' in s,
+                    lambda s: '9 a.m.' in s and 'saturday-sunday' in s,
+                ]
+
+            selected = []
+            seen = set()
+
+            for pattern in patterns:
+                for url, schedule in candidates:
+                    normalized = schedule.lower().replace('–', '-')
+                    if pattern(normalized) and normalized not in seen:
+                        selected.append((url, schedule))
+                        seen.add(normalized)
+                        break
+
+            if selected:
+                prefix = (
+                    'No. Published Dupaco branch lobby schedules differ. '
+                    if service == 'lobby'
+                    else 'Published Dupaco drive-up schedules vary by branch. '
+                )
+
+                parts = [
+                    f'Example {i}: {schedule}'
+                    for i, (_, schedule) in enumerate(selected, 1)
+                ]
+
+                sources = [
+                    Source(url, sid, schedule[:230])
+                    for url, schedule in selected
+                ]
+
+                return Answer(
+                    (prefix + ' '.join(parts))[:1500],
+                    sources,
+                    True,
+                )
         return None
 
     def answer(self,question,as_of=None):
