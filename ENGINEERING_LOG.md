@@ -2,6 +2,20 @@
 
 **Author:** Prajwal Devaraj
 
+## November 5, 2026 — Problem Review and Initial Development
+
+### Requirements and Problem Understanding
+
+Reviewed the temporal knowledge-system assignment and its evaluation requirements, including historical questions, source citations, conflict resolution, qualified financial rates, and refusal behavior.
+
+Examined the provided snapshot-based evaluation workflow and identified the importance of preserving historical evidence instead of relying exclusively on the latest crawled content.
+
+### Initial Engineering Direction
+
+Established the direction for a local, deterministic retrieval system designed to support source-backed answers, historical queries, and repeatable evaluation.
+
+The implementation and testing work continued on November 6.
+
 ## November 6, 2026 — Implementation and Validation
 
 ### System Design
