@@ -53,3 +53,21 @@ Status: **Planned; write results only after doing the work.**
 ## Decision notes
 
 For each substantive revision, capture: **problem -> evidence -> decision -> trade-off -> test result**. That provides more useful engineering evidence than an unexplained score or a polished timeline.
+
+## November 6, 2026 — Certificate completeness evaluation
+
+Investigated the broad certificate-rate question `dup-005`.
+
+The public test specifies an empty `must_include` list, and the
+deterministic scoring implementation assigns correctness 0.0 when
+that list is empty. Two independently tested implementations returned
+the available certificate terms and rates but received no credit.
+
+An optional judge-based scoring path exists, but it was not used in
+these public evaluation runs.
+
+Decision:
+- Preserve the verified 95.50% public-score implementation.
+- Do not change the evaluation harness.
+- Treat certificate-list completeness as a separate behavior to test.
+- Keep historical as-of rate selection and refusal behavior intact.

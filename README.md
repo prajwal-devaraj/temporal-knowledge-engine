@@ -11,9 +11,11 @@ This is intentionally not a general-purpose chatbot. The trade-off is less natur
 ## Files
 
 - `solution.py`: implementation of `build()`, `ingest()`, `answer()`, and `conflicts()`
+- `branch_evidence.py`: extracts dated branch-count claims from archived pages
+- `branch_hours.py`: extracts separate lobby and drive-up schedules from branch announcements
 - `requirements.txt`: no third-party packages required
 - `NOTES.md`: technical decisions, limitations, and reproduction steps
-- `ENGINEERING_LOG.md`: dated work log to fill in with actual changes and test outcomes
+- `ENGINEERING_LOG.md`: dated development log with actual changes, evaluations, and documented limitations
 
 ## Run it
 
@@ -29,7 +31,7 @@ The evaluation uses the same three-method contract as the supplied starter. No A
 
 ## Public practice baseline
 
-The current local baseline on the 40 supplied practice questions is **0.8667** (November 6, 2026), with zero runner errors. The score is a practice result, not a prediction of the private evaluation. Weak spots include branch information, conflict resolution, and complete list questions.
+The latest verified public practice score on 40 questions is **0.9550 (95.50%)** (November 6, 2026), with zero runner errors. This practice result does not predict private evaluation performance. The deterministic public scoring rules assign zero correctness to questions with an empty `must_include` list when optional LLM judging is disabled.
 
 ## Data handling
 
