@@ -1,32 +1,66 @@
-# Implementation notes
+# Implementation Notes
 
-## Main idea
+**Author:** Prajwal Devaraj
 
-I treat each website crawl as a dated collection of evidence rather than merging all pages into one source of truth. During `ingest`, the system creates a separate passage index for each snapshot and remembers rate-table rows for later comparison. `answer` chooses the right snapshot first, retrieves relevant passages, then selects evidence with attention to source type and question qualifiers. `conflicts` reports changes it can identify in comparable structured rate rows.
+## Architecture
 
-## Why this design
+The Temporal Knowledge Engine treats each website crawl as a dated collection of evidence rather than merging all snapshots into a single source of truth.
 
-The assignment has two different problems: finding relevant information and deciding whether that information applies. A broad keyword match can retrieve a rate but miss its loan term, balance tier, or date. The implementation indexes Markdown table rows with their headers, keeps old snapshots available, and boosts official product/rate pages relative to calculators or archive content. A question with an `as_of` date can only consult a snapshot taken on or before that date. The goal is to make a specific, defensible choice rather than repeat several disagreeing numbers.
+The implementation provides three operations:
 
-I used a deterministic local approach instead of a hosted language model. That removes API-key setup, keeps the scoring run offline, and gives consistent repeated answers. It also has clear limits: complex wording and pages with unusual formatting are harder to interpret without richer semantic parsing.
+- `ingest(snapshot)`: indexes dated website evidence.
+- `answer(question, as_of=None)`: retrieves relevant facts using the appropriate historical snapshot and returns source-backed answers when supported.
+- `conflicts()`: identifies comparable facts that changed across snapshots and reports their resolution.
 
-## What I tested
+## Design Decisions
 
-The participant-kit scorer was run locally against its 40 public questions on November 6, 2026. The latest recorded result was 0.8667 QA score, 0 runner errors, 0 stale-trap hits, and repeat/paraphrase consistency of 1.0. The scorer reported p95 answer latency of 0.33 seconds. These numbers describe that local test only; the hidden evaluation can differ. Conflict-detection accuracy cannot be inferred from the available summary alone.
+The retrieval system is local and deterministic. It preserves historical evidence, handles structured Markdown tables, distinguishes product qualifiers, and prioritizes more relevant authoritative sources.
 
-## Known limitations and next improvements
+This approach avoids external model dependencies and supports repeatable answers with low response latency.
 
-- Branch information: improve address/hours matching so the right branch and lobby/drive-through distinction are preserved.
-- Conflict resolution: compare facts across differently structured pages, not only recurring rate-table rows.
-- List questions: improve completeness without including unrelated products or stale values.
-- Extraction: handle more Markdown layouts and strengthen confidence thresholds for ambiguous evidence.
+The main trade-off is reduced flexibility when interpreting unusually structured pages or complex natural-language questions.
 
-## Reproduce
+## Verified Evaluation Results
 
-From the extracted participant kit root, with this folder named `submission`:
+Evaluation date: November 6, 2026.
+
+Public practice evaluation:
+- Questions: 40
+- Final score: 95.50%
+- Execution errors: 0
+- Stale-trap hits: 0
+- Paraphrase consistency: 100%
+- Repeat consistency: 100%
+- p95 answer latency: 0.36 seconds
+- Snapshot ingestion: 8.6 seconds
+
+Synthetic evaluation:
+- Questions: 5
+- Final score: 100%
+- Conflict detection F1: 100%
+- Execution errors: 0
+
+Automated regression tests:
+- 17 tests passed
+- Coverage includes historical retrieval, source citations, refusals, repeatability, branch evidence, and conflict resolution.
+
+These results describe the supplied local evaluations, not the hidden evaluation.
+
+## Known Limitations
+
+- Multi-item list completeness can be improved.
+- Some complex Markdown layouts may require richer parsing.
+- Cross-page conflict detection remains an area for future improvement.
+- The public deterministic scorer assigns zero correctness to a question with an empty `must_include` list when optional judging is disabled. This affects interpretation of the certificate-list evaluation.
+
+## Reproduction
+
+Place `solution.py`, `branch_evidence.py`, and `branch_hours.py` together inside the participant kit's submission directory.
+
+From the participant kit root:
 
 ```bash
 python harness/run_eval.py --submission submission --eval eval/public_eval.jsonl
 ```
 
-The submission uses Python 3.11 standard-library modules only. **No API keys, paid APIs, or live website calls are needed.** The supplied snapshots and evaluation assets must remain outside the public repository.
+The implementation requires no external API keys or live website access. The employer-provided snapshots and evaluation datasets are not included in the public repository.

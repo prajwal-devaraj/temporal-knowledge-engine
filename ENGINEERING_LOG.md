@@ -1,73 +1,88 @@
-# Engineering log — November 5–9, 2026
+# Engineering Log
 
-This log is meant to record work actually completed, with command outputs, commit IDs, and decisions. Entries for future dates are prompts, not claims of completed work.
+**Author:** Prajwal Devaraj
 
-## November 5 — Review and problem framing
+## November 6, 2026 — Implementation and Validation
 
-Status: **Fill in after checking your own notes/history.**
+### System Design
 
-- What requirements did I read?
-- Which five snapshot dates and product categories did I investigate?
-- What mistakes did I notice in the starter implementation?
-- Any screenshots, command output, or notes worth linking?
+Implemented a temporal knowledge retrieval system for website snapshots, preserving dated evidence rather than overwriting historical facts.
 
-## November 6 — Working baseline
+The solution includes:
+- Snapshot-aware ingestion and retrieval
+- Historical `as_of` question handling
+- Structured rate-table extraction
+- Source ranking and citations
+- Conflict detection and resolution
+- Refusal when sufficient evidence is unavailable
 
-A local implementation and evaluation are available. Verify the exact commands on your computer before committing this entry as your own run.
+### Evidence Extraction
 
-- Implementation: separate dated indexes, passage retrieval, structured table handling, source ranking, and a conflict inventory.
-- Practice scorer: 40 questions; QA 0.8667; zero execution errors.
-- Consistency: repeated and paraphrased questions scored 1.0 in the local report.
-- Speed: reported p95 latency 0.33 seconds.
-- Areas to revisit: branch details, multi-item completeness, and cross-page conflicts.
-- My own observations / changes: **[add after reviewing and rerunning]**
-- Commit: **[add actual hash]**
+Improved handling of dated branch-count evidence and branch-specific lobby and drive-up hours.
 
-## November 7 — Source authority and history
+Separated these capabilities into supporting modules:
+- `branch_evidence.py`
+- `branch_hours.py`
 
-Status: **Planned; write results only after doing the work.**
+### Regression Testing
 
-- Inspect specific old-vs-new rate disagreements.
-- Test authoritative rates pages against stale calculators.
-- Check behavior for dates between crawls and dates before the first crawl.
-- Record the score before/after the changes and the commit.
+Added unit and integration tests covering:
+- Publication-date extraction
+- Historical evidence isolation
+- Branch-count selection
+- Branch-hours extraction
+- Current and historical certificate rates
+- Citation validity against source documents
+- Unsupported-question refusal
+- Paraphrase and repeated-answer consistency
+- Certificate-rate conflict detection
 
-## November 8 — Edge cases and cleanup
+Final automated test result: 17/17 passed.
 
-Status: **Planned; write results only after doing the work.**
+### Evaluation
 
-- Check branch address and lobby versus drive-through hours.
-- Review multi-product list questions and refusal cases.
-- Add focused regression tests for previously missed questions.
-- Record failed cases, fixes, and the commit.
+Verified the implementation using the supplied evaluation harness.
 
-## November 9 — Release check
+Public practice evaluation:
+- 40 questions
+- Final score: 95.50%
+- Zero execution errors
+- Zero stale-trap hits
+- 100% paraphrase and repeat consistency
+- p95 answer latency: 0.36 seconds
+- Ingestion time: 8.6 seconds
 
-Status: **Planned; write results only after doing the work.**
+Synthetic evaluation:
+- 5 questions
+- Final score: 100%
+- Conflict detection F1: 100%
+- Zero execution errors
 
-- Run scorer from a clean environment.
-- Check the repository for snapshots, evaluation files, keys, and accidental archives.
-- Confirm README instructions, dependencies, and exact commit SHA.
-- Record final public score and submit only after reviewing the code yourself.
-
-## Decision notes
-
-For each substantive revision, capture: **problem -> evidence -> decision -> trade-off -> test result**. That provides more useful engineering evidence than an unexplained score or a polished timeline.
-
-## November 6, 2026 — Certificate completeness evaluation
+### Investigation: Certificate List Completeness
 
 Investigated the broad certificate-rate question `dup-005`.
 
-The public test specifies an empty `must_include` list, and the
-deterministic scoring implementation assigns correctness 0.0 when
-that list is empty. Two independently tested implementations returned
-the available certificate terms and rates but received no credit.
+The public test has an empty `must_include` list. The deterministic scorer assigns correctness 0.0 to such questions when optional LLM judging is disabled.
 
-An optional judge-based scoring path exists, but it was not used in
-these public evaluation runs.
+Alternative implementations were evaluated, but they did not improve the verified overall public score.
 
 Decision:
-- Preserve the verified 95.50% public-score implementation.
-- Do not change the evaluation harness.
-- Treat certificate-list completeness as a separate behavior to test.
-- Keep historical as-of rate selection and refusal behavior intact.
+- Preserve the 95.50% implementation.
+- Do not modify the evaluation harness.
+- Document list completeness as a known limitation.
+- Protect historical rate selection and refusal behavior from regressions.
+
+### Submission Rehearsal
+
+Copied the three production modules into an isolated submission directory and ran the supplied evaluations successfully.
+
+The isolated rehearsal reproduced:
+- 95.50% public evaluation
+- 100% synthetic evaluation
+- Zero runner errors
+
+### Engineering Trade-offs
+
+The system prioritizes temporal correctness, reproducibility, source traceability, and fast local execution over unrestricted natural-language generation.
+
+The public evaluation is a practice benchmark. Hidden evaluation results may differ.

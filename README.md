@@ -1,5 +1,7 @@
 # Credit union knowledge system
 
+**Author:** Prajwal Devaraj
+
 A Python implementation of the interface.ai knowledge-system exercise. The system searches five dated website snapshots, returns a cited answer when it has enough evidence, and keeps track of changed rates across snapshots.
 
 ## What I chose to build
