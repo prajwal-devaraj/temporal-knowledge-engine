@@ -1,12 +1,17 @@
 """Integration tests against the supplied interface.ai synthetic snapshots."""
 
+import os
 import sys
 import unittest
 from pathlib import Path
 
-KIT = Path(
-    "/tmp/interface-ai-evaluation/hackathon-knowledge-kit-participant"
+DEFAULT_KIT = (
+    "/tmp/interface-ai-evaluation/"
+    "hackathon-knowledge-kit-participant"
 )
+KIT = Path(
+    os.environ.get("INTERFACE_AI_KIT", DEFAULT_KIT)
+).expanduser().resolve()
 
 if str(KIT) not in sys.path:
     sys.path.insert(0, str(KIT))
