@@ -122,6 +122,12 @@ class Knowledge:
         available=[(d,s) for d,s in self.snapshots if not as_of or d<=as_of[:10]]
         return available[-1][1] if available else None
 
+    def _snapshot_date(self, sid):
+        return next(
+            (d for d, snapshot_id in self.snapshots if snapshot_id == sid),
+            None,
+        )
+
     def _retrieve(self,question,sid,limit=60):
         docs,df,inv=self.index[sid]
         q=tokens(question)
@@ -281,11 +287,28 @@ class Knowledge:
                     a=deliver(personal[:6],card);b=deliver(business[:4],bcard)
                     if a and b:return Answer(a.text+' '+b.text,a.sources+b.sources,True)
                 return deliver(personal[:5],card)
-        if 'branch' in q and ('22' in q or 'how many' in q or 'number' in q):
-            # Locate an explicit branch-office count rather than counting ATM search results.
-            for u,m in pages.items():
-                matches=re.findall(r'[^\n]{0,90}\b(\d+) branch (?:office )?locations[^\n]{0,60}',m,re.I)
-                if matches:return deliver([f'{matches[-1]} branch office locations.'],(u,m))
+        if 'branch' in q and any(
+            phrase in q for phrase in ('how many', 'number of branches', 'branch count')
+        ):
+            from branch_evidence import select_branch_count
+
+            selected = select_branch_count(
+                pages,
+                as_of=self._snapshot_date(sid),
+            )
+            if selected:
+                return Answer(
+                    text=f"{selected['count']} branch office locations.",
+                    sources=[
+                        Source(
+                            selected['url'],
+                            sid,
+                            selected['quote'][:230],
+                        )
+                    ],
+                    confident=True,
+                )
+            return self._refuse()
         if 'online' in q and ('join' in q or 'member' in q):
             page=get('/about/join')
             if page and 'https://join.dupaco.com/' in page[1]:return deliver(['Join online at https://join.dupaco.com/'],page)
